@@ -99,8 +99,10 @@ def buy_item(data):
         sell = 0
         send({'message': f"玩家 {player.player_name} 发动了 0 元购技能", 'messageType': 'warning', 'stage': [1, 2]},
              to=room)
-    elif player.player_attributes['profiteer']:
+    if player.player_attributes['profiteer'] and player.zero_buy <= 0:
         sell += 1
+    if player.player_attributes['promotions'] and player.zero_buy <= 0:
+        sell = sell / 2
 
     if player.player_money < sell and player.zero_buy <= 0 and not player.player_attributes['market']:
         emit('message', {'message': '货币不足，无法购买', 'messageType': 'error', 'stage': [1, 2]})

@@ -135,7 +135,8 @@ def run_special_by_card(data):
                 p.player_status = 'Bumper-Harvest'
                 p.special_config = special_config
 
-        send({'message': f"{to_player.role_id} 号玩家 拿走了 {card['cardCnName']}", 'messageType': 'warning', 'stage': [1, 2]}, to=room)
+        send({'message': f"{to_player.role_id} 号玩家 拿走了 {card['cardCnName']}", 'messageType': 'warning',
+              'stage': [1, 2]}, to=room)
 
     # 生化母体
     if event_type == 'Biochemical-Matrix':
@@ -165,8 +166,8 @@ def run_special_by_card(data):
                 p.player_status = 'Biochemical-Matrix'
                 p.special_config = special_config
 
-        send({'message': f"{to_player.role_id} 号玩家 拿走了 {card['cardCnName']}", 'messageType': 'warning', 'stage': [1, 2]}, to=room)
-
+        send({'message': f"{to_player.role_id} 号玩家 拿走了 {card['cardCnName']}", 'messageType': 'warning',
+              'stage': [1, 2]}, to=room)
 
     if player is not None:
         player.player_status = ''
@@ -553,9 +554,44 @@ def run_special_by_event(data):
             p.player_status = ''
             p.special_config = ''
 
-        emit('message', {'message': f"已触发移形换位时间你的卡牌已被交换", 'messageType': 'warning', 'stage': [1, 2]}, room=player.sid)
+        emit('message', {'message': f"已触发移形换位时间你的卡牌已被交换", 'messageType': 'warning', 'stage': [1, 2]},
+             room=player.sid)
         emit('message', {'message': f"已触发移形换位时间你的卡牌已被交换", 'messageType': 'warning', 'stage': [1, 2]},
              room=to_player.sid)
+
+    # 我们，我不明白
+    if event_type == 'We-I-Dont-Understand':
+        value = special_config['value']
+
+        room = get_room(room_id)
+        if value == 0:
+            for p_name, p_config in room.players.items():
+                p = p_config['playerConfig']
+                p.player_money += 6
+                p.draw_count += 2
+            send({"message": "无暇完成 我们，我不明白 事件，所有玩家获得 6 货币和 2 次抽卡次数", "messageType": "success",
+                  "stage": [1, 2]}, to=room)
+        elif value == 1:
+            for p_name, p_config in room.players.items():
+                p = p_config['playerConfig']
+                random_num = random.randint(1, 6)
+                p.player_money += random_num
+                emit("message",
+                     {"message": f"普通完成 我们，我不明白 事件，你获得 {random_num} 个货币", "messageType": "success",
+                      "stage": [1, 2]}, room=p.sid)
+        elif value == -1:
+            for p_name, p_config in room.players.items():
+                p = p_config['playerConfig']
+                random_num = random.randint(4, 6)
+                random_card = get_random_card_by_type_and_player_deck_list(room_id, p.player_name, random_num, True)
+                save_card({
+                    "roomId": room_id,
+                    "playerName": p.player_name,
+                    "card": random_card
+                })
+                emit("message",
+                     {"message": f"团灭完成 我们，我不明白 事件，你获得一张 {random_card['cardCnName']} 卡牌", "messageType": "error",
+                      "stage": [1, 2]}, room=p.sid)
 
     player.player_status = ''
     player.special_config = ''

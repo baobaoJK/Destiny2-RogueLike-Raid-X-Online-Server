@@ -55,6 +55,9 @@ def finish_global_event(data):
     player_event = player.player_event_list[event_index]
     player_event_name = player_event['eventName']
 
+    player_money = random.randint(1, 3)
+    player.player_money += player_money
+
     # 内鬼
     if player_event_name == 'Spy':
         special_by_spy(room_id, player_name)
@@ -151,10 +154,18 @@ def run_punish(data):
     room_id = data['roomId']
     player_name = data['playerName']
     card = data['card']
+    player = get_player(room_id, player_name)
+
+    # if player.punish_count <= 0:
+
+        # return
 
     # 获取玩家，更改配置
-    player = get_player(room_id, player_name)
-    player.punish_count -= 1
+    player.punish_count = 0
+    player.player_status = ""
+    player.special_config = ""
+    print(player.punish_count)
+    # emit('message', {'type': 'runPunish', 'stage': [1, 2]})
 
     save_card({
         "roomId": room_id,
@@ -162,10 +173,6 @@ def run_punish(data):
         "card": card
     })
 
-    if player.punish_count == 0:
-        player.special_config = ""
-
-    emit('message', {'type': 'runPunish', 'stage': [1, 2]})
 
 
 # 执行个人事件

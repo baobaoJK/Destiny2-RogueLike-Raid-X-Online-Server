@@ -2,10 +2,11 @@ import random
 
 from entitys.card_type import CardType
 from services.deck_list_service import get_random_card_by_type, save_card, get_random_card_by_type_and_player_deck_list
-from services.room_service import get_player, get_room
+from services.room_service import get_player, get_room, get_player_by_role_id
 from socketio_instance import socketio
 from flask_socketio import emit, send
 
+from utils import shuffle_list
 from utils.lottery import lottery_by_count, lottery
 
 
@@ -75,8 +76,25 @@ def handle_map_doop(data):
     send({'type': 'mapDoor', 'message': f'已为你添加了新的赏金任务，2次抽卡机会',
           'messageType': 'success', 'stage': [1, 2]},
          to=room)
-    send({'type': 'mapDoor', 'message': f'已生成个人事件和全局事件并添加1次免费刷新商店机会', 'messageType': 'warning', 'stage': [1, 2]},
+    send({'type': 'mapDoor', 'message': f'已生成个人事件和全局事件并添加1次免费刷新商店机会', 'messageType': 'warning',
+          'stage': [1, 2]},
          to=room)
+
+    # 命定混沌
+    if room.random_seats:
+        random_seats_list = shuffle_list(room.seats)
+
+        for p_name, p_config in room.players.items():
+            p = p_config['playerConfig']
+
+            for i, s in enumerate(random_seats_list):
+                if s is None:
+                    continue
+                if s['playerName'] == p_name:
+                    print(f"{p.role_id} - {i + 1}")
+                    p.role_id = i + 1
+                    emit("message", {"message": "因为全局事件 命定混沌，你的座位号发生了变化", "messageType": "warning", "stage": [1, 2]}, room=p.sid)
+                    break
 
 
 # 遭遇战通关
@@ -119,9 +137,9 @@ def handle_map_net(data):
                 if debuff_count > 0:
                     player.player_money += debuff_count
                     emit('message', {'type': 'compensate',
-                                     'message': f"因携带了负面卡牌通过遭遇战，获得 {debuff_count} 个货币"})
+                                     'message': f"因携带了负面卡牌通过遭遇战，获得 {debuff_count} 个货币"}, room=sid)
             # 重重难关
-            if player.player_attributes['difficult']:
+            if player.player_attributes['difficult'] and not player.player_attributes['compensate']:
                 count = room.raid_config['raidLevelPoint'] - 1
 
                 for _ in range(count):
@@ -134,7 +152,8 @@ def handle_map_net(data):
                     })
 
                 emit('message', {'type': 'difficult',
-                                 'message': f"因你携带重重难关，已通过第 {count} 关，已经随机生成 {count} 张不适卡牌"})
+                                 'message': f"因你携带重重难关，已通过第 {count} 关，已经随机生成 {count} 张不适卡牌"},
+                     room=sid)
             # 这不是很简单吗
             if player.player_attributes['easy']:
                 count = room.raid_config['raidLevelPoint'] - 1
@@ -148,7 +167,32 @@ def handle_map_net(data):
                         "card": card
                     })
                 emit('message', {'type': 'easy',
-                                 'message': f"因你携带这不是很简单吗，已通过第 {count} 关，已经随机生成 {count} 张增益卡牌"})
+                                 'message': f"因你携带这不是很简单吗，已通过第 {count} 关，已经随机生成 {count} 张增益卡牌"},
+                     room=sid)
+            # 堕落之血
+            if player.player_attributes['blood'] and not player.player_attributes['compensate']:
+                all_deck_list = []
+
+                for c_name, c_list in player.deck_list.items():
+                    if c_name == CardType.micro_discomfort or c_name == CardType.strong_discomfort or c_name == CardType.unacceptable:
+                        for c in c_list:
+                            if c['cardName'] != 'Corrupted-Blood':
+                                all_deck_list.append(c)
+
+                random_player_name = random.choices([p for p in room.players if p != player_name])
+
+                random_player = get_player(room_id, random_player_name[0])
+
+                random_card = random.choices(all_deck_list)
+
+                save_card({
+                    "roomId": room_id,
+                    "playerName": random_player.player_name,
+                    "card": random_card[0]
+                })
+
+                emit("message", {"message": f"因你身上携带有 堕落之血，已将您的 {random_card[0]['cardCnName']} 复制到 {random_player.role_id} 号玩家身上", 'messageType': 'warning'}, room=sid)
+                emit("message", {"message": f"因 {player.role_id} 号身上携带有 堕落之血，已将他的 {random_card[0]['cardName']} 复制到你的身上", 'messageType': 'warning'}, room=random_player.sid)
 
             emit('message',
                  {'type': 'mapNext', 'message': f'已通关，你获得了 {player_money} 个光尘货币', 'messageType': 'success',
@@ -175,7 +219,8 @@ def handle_get_chest(data):
         player_money = random.randint(1, 3)
         player.raid_chest += 1
         player.player_money += player_money
-        emit('message', {'type': 'message', 'message': f'已获取隐藏箱，获得 {player_money} 个货币', 'stage': [1, 2]})
+        emit('message', {'type': 'message', 'message': f'已获取隐藏箱，获得 {player_money} 个货币'})
+        send({'stage': [1, 2]}, to=room)
     else:
         emit('message', {'type': 'message', 'message': '没有隐藏箱了别点了!', 'messageType': 'error'})
 
@@ -188,7 +233,8 @@ def handle_set_money(data):
     player = get_player(room_id, player_name)
     player.player_money = data['money']
 
-    emit('message', {'type': 'setMoney', 'stage': [1]})
+    # emit('message', {'type': 'setMoney', 'stage': [1]})
+    send({'type': 'setMoney', 'stage': [1, 2]}, to=get_room(room_id))
 
 
 # 设置抽卡次数
@@ -199,7 +245,8 @@ def handle_draw_count(data):
     player = get_player(room_id, player_name)
     player.draw_count = data['drawCount']
 
-    emit('message', {'type': 'setDrawCount', 'stage': [1]})
+    # emit('message', {'type': 'setDrawCount', 'stage': [1]})
+    send({'type': 'setDrawCount', 'stage': [1, 2]}, to=get_room(room_id))
 
 
 # 无暇通关
@@ -212,7 +259,7 @@ def handle_flawless(data):
     for player_name in players:
         players[player_name]['playerConfig'].player_money += 6
 
-    send({'type': 'flawless', 'message': '无暇通关，每个人获得 6 个货币', 'stage': [1]}, to=room)
+    send({'type': 'flawless', 'message': '无暇通关，每个人获得 6 个货币', 'stage': [1, 2]}, to=room)
 
 
 # 生成赏金列表

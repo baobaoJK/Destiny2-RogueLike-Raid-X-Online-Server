@@ -519,3 +519,36 @@ def special_by_matrix(room_id, players):
         p.special_config = special_config
 
     send({'type': 'showSpecialDialog', 'specialConfig': special_config})
+
+
+# 我们，我不明白
+def special_by_we(room_id, player_name):
+    player = get_player(room_id, player_name)
+
+    options_list = [
+        {
+            "text": "无暇",
+            "value": 0
+        },
+        {
+            "text": "完成遭遇战",
+            "value": 1
+        },
+        {
+            "text": "被团灭了",
+            "value": -1
+        }
+    ]
+    player.player_status = 'We-I-Dont-Understand'
+    special_config = {
+        'title': '我们，我不明白',
+        'description': f'全队立刻去打一场普通切除，打完算一次完成遭遇战，如果无瑕则多加6个光尘货币和两次抽卡次数，如果团灭则不获取货币和抽卡次数并且随机获得抽一张不适',
+        'type': 'optionsList',
+        'eventType': 'We-I-Dont-Understand',
+        'send': player.role_id,
+        'to': 0,
+        'optionsList': options_list,
+    }
+    player.special_config = special_config
+
+    emit('message', {'type': 'showSpecialDialog', 'specialConfig': special_config})

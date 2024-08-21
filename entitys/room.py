@@ -18,6 +18,7 @@ class Room:
         self.room_status = "waiting"
         self.card_status = ""
         self.seats = []
+        self.random_seats = False
         self.players = {}
         self.global_event_list = []
         self.raid_config = None
@@ -37,13 +38,28 @@ class Room:
             'roomStage': self.room_stage,
             # 'players': [player['playerName'] for player in self.players],
             'seats': self.seats,
+            'randomSeats': self.random_seats,
             'roomStatus': self.room_status,
             'cardStatus': self.card_status,
             'players': [player for player in self.players],
+            'playersInfo': self.players_info,
             'globalEventList': self.global_event_list,
             'raidConfig': self.raid_config,
             'shopConfig': self.shop_config,
         }
+
+    # 玩家信息
+    @property
+    def players_info(self):
+        info_list = {}
+
+        for player_name, player_config in self.players.items():
+            info_list[player_name] = {
+                "playerMoney": player_config['playerConfig'].player_money,
+                "drawCount": player_config['playerConfig'].draw_count
+            }
+
+        return info_list
 
     # 设置房间配置
     def set_game_config(self):

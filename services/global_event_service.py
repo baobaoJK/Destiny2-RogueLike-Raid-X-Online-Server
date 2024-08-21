@@ -4,7 +4,7 @@ from services import get_room, get_player, get_room_list
 from socketio_instance import socketio
 from utils import shuffle_list
 from utils.lottery import lottery
-from utils.special_event import special_by_bumper_harvest, special_by_move, special_by_matrix
+from utils.special_event import special_by_bumper_harvest, special_by_move, special_by_matrix, special_by_we
 
 
 # 接受全局事件
@@ -106,8 +106,6 @@ def run_global_event(room, global_event):
     if global_event_name == 'Flip-The-Table':
         message_str = f"本次 Raid 进度和卡牌将全部清零重置 从头开始"
         FLIP_THE_TABLE = True
-        room_list = get_room_list()
-        del room_list[room.room_id]
 
 
     # 左平行，右......
@@ -128,12 +126,36 @@ def run_global_event(room, global_event):
                        f"复活必须 {player_list[0]} 号位玩家去指定一位有复活币"
                        f"的队友，被指定之人才能复活队友")
 
+    # 命定混沌
+    if global_event_name == 'Deterministic-Chaos':
+        message_str = "遭遇战开始之前（抵达插旗点）都会随机调位"
+        room.random_seats = True
+
+    # 蜂巢思维
+    if global_event_name == 'Hive-Mind':
+        message_str = "这次的全局事件为火力战队队长的一个 个人事件 （点击接受自动替换所有人的个人事件为队长的事件）"
+
+        captain_player = get_player(room.room_id, room.room_owner)
+
+        for p_name, p_config in room.players.items():
+            if p_name == room.room_owner:
+                continue
+            p = p_config['playerConfig']
+
+            p.player_event_list = captain_player.player_event_list[:]
+
+    # 我们，我不明白
+    if global_event_name == 'We-I-Dont-Understand':
+        special_by_we(room.room_id, room.room_owner)
+
     # 判断消息是否为空
-    if message_str != '':
+    if message_str != '' and not FLIP_THE_TABLE:
         send({'type': 'runGlobalEvent', 'message': message_str, 'stage': [1, 2]}, to=room)
 
     # 掀桌
     if FLIP_THE_TABLE:
-        send({'type': 'flipTheTable', 'message': '因抽到掀桌事件，所有玩家被移除房间！再见！', 'messageType': 'success'})
+        send({'type': 'flipTheTable', 'message': '因抽到掀桌事件，所有玩家被移除房间！再见！', 'messageType': 'success'}, to=room)
+        room_list = get_room_list()
+        del room_list[room.room_id]
 
 

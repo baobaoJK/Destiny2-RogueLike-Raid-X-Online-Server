@@ -109,6 +109,8 @@ class Player:
             "counteract": self.counteract,  # 免死金牌与帝王禁令
             "difficult": self.difficult,  # 重重难关
             "easy": self.easy,  # 这不是很简单吗
+            "promotions": self.promotions,  # 商店促销
+            "blood": self.blood,  # 堕落之血
             "lastCount": self.last_count  # 卡池剩余数量
         }
 
@@ -193,6 +195,16 @@ class Player:
     @property
     def easy(self):
         return any(item['cardName'] == 'Easy' for item in self.deck_list[CardType.opportunity])
+
+    # 商店促销
+    @property
+    def promotions(self):
+        return any(item['cardName'] == 'Store-Promotions' for item in self.deck_list[CardType.technology])
+
+    # 堕落之血
+    @property
+    def blood(self):
+        return any(item['cardName'] == 'Corrupted-Blood' for item in self.deck_list[CardType.unacceptable])
 
     # 卡池剩余数量
     @property

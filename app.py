@@ -4,24 +4,24 @@ from socketio_instance import socketio, app
 import services
 
 
-# 连接触发
-@socketio.on('connect')
-def handle_connect():
-    current_connections = len(socketio.server.manager.rooms['/'])
-    print(f"Current number of connections: {current_connections}")
-    emit('connection_count', {'count': current_connections})
-    emit('message', {'type': 'message', 'stage': [1, 2]})
+# # 连接触发
+# @socketio.on('connect')
+# def handle_connect():
+#     current_connections = len(socketio.server.manager.rooms['/'])
+#     print(f"Current number of connections: {current_connections}")
+#     emit('connection_count', {'count': current_connections})
+#     emit('message', {'type': 'message', 'stage': [1, 2]})
 
 
 # 退出链接
-@socketio.on('disconnect')
-def handle_disconnect():
-    pass
-
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    print("disconnect")
+# @socketio.on('disconnect')
+# def handle_disconnect():
+#     pass
+#
+#
+# @socketio.on('disconnect')
+# def handle_disconnect():
+#     print("disconnect")
     # room_list = []
     # username = request.sid
     # print(f"{request}")

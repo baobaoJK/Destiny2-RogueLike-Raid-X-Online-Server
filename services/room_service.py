@@ -1,7 +1,6 @@
 from flask import jsonify, request
 from flask_socketio import emit, join_room, leave_room, send
 
-
 import utils
 from entitys.player import Player
 from entitys.room import Room
@@ -21,17 +20,35 @@ def get_room(room_id):
     return room_list[room_id]
 
 
+# 返回当前所有房间列表的信息
+def get_room_list_info():
+    room_list_info = []
+    for r_name, r_info in room_list.items():
+        if r_info.room_status != 'playing':
+            r = {
+                "playerName": r_info.room_owner,
+                "players": len(r_info.players),
+                "roomId": r_info.room_id
+            }
+            room_list_info.append(r)
+    # return [room.to_dict() for room_name, room in room_list.items() if room.room_status != 'playing']
+    return room_list_info
+
+
 # 获取玩家实体
 def get_player(room_id, player_name):
     room = room_list[room_id]
     player = room.players[player_name]['playerConfig']
     return player
 
+
 # 根据 role_id 获取玩家
 def get_player_by_role_id(room_id, role_id):
     room = room_list[room_id]
-    player = next((p_config['playerConfig'] for p_name, p_config in room.players.items() if p_config['playerConfig'].role_id == role_id), None)
+    player = next((p_config['playerConfig'] for p_name, p_config in room.players.items() if
+                   p_config['playerConfig'].role_id == role_id), None)
     return player
+
 
 # 输出当前在房间的玩家
 def show_online_list(room):
@@ -40,6 +57,16 @@ def show_online_list(room):
     for p in room.players:
         print(p)
     print("--------------------------------")
+
+
+# 连接触发
+@socketio.on('connect')
+def handle_connect():
+    current_connections = len(socketio.server.manager.rooms['/'])
+    print(f"Socket 连接数量: {current_connections}")
+    emit('connection_count', {'count': current_connections})
+    emit('message', {'type': 'message', 'stage': [1, 2]})
+    emit('message', {'type': 'roomList', 'roomList': get_room_list_info()})
 
 
 # 创建房间
@@ -81,8 +108,8 @@ def handle_create_room(data):
 # 加入房间
 @socketio.on('joinRoom')
 def handle_join_room(data):
-    room_id = data['roomId']
     # 用户信息
+    room_id = data['roomId']
     player_data = data['player']
 
     # 判断用户信息是否转换
@@ -93,11 +120,10 @@ def handle_join_room(data):
     player = Player(player_data)
 
     if room_id is None or player is None:
-        emit('message', {'message': f'服务器错误'})
         return
 
-    if not room_id in room_list:
-        emit('message', {'message': f'房间号不存在'})
+    if not (room_id in room_list):
+        emit('message', {'type': 'idNone', 'message': f'房间号不存在'})
         return
 
     # 获取房间
@@ -136,9 +162,12 @@ def handle_join_room(data):
         # 分发信息
         raid_map = room.get_raid_config()
         if raid_map is not None and raid_map['raidName'] is not None:
-            emit('message', {'type': 'setMap', 'message': f"已选择 {raid_map['raidName']} 进行本次突袭", 'stage': [1, 2]})
+            emit('message',
+                 {'type': 'setMap', 'message': f"已选择 {raid_map['raidName']} 进行本次突袭", 'stage': [1, 2]})
     else:
         emit('message', {'message': '房间已满无法加入'})
+
+    emit('message', {'type': 'roomList', 'roomList': get_room_list_info()}, broadcast=True)
 
 
 # 退出房间
@@ -147,39 +176,38 @@ def handle_leave_room(data):
     # 房间 id
     room_id = data['roomId']
     # 玩家信息
-    player_data = {
-        "role": data['player']['role'],
-        "roleId": data['player']['roleId'],
-        "playerName": data['player']['playerName']
-    }
-    player = Player(player_data)
+    player_name = data['playerName']
 
-    if room_id is None or player is None:
+    if room_id is None or player_name is None:
         return
 
     if not (room_id in room_list):
         return
 
+    room = get_room(room_id)
+
+    if player_name not in room.players:
+        return
+
     # 退出房间
-    room = room_list[room_id]
     leave_room(room)
 
     # 移除玩家
     # for index, p in enumerate(room.players):
     #     if p['playerName'] == player.player_name:
-    del room.players[player.player_name]
+    del room.players[player_name]
 
-    print(f"玩家 {player.player_name} 退出 {room_id} 房间了 ")
+    print(f"玩家 {player_name} 退出 {room_id} 房间了 ")
 
     # 替换位置信息
     for i, s in enumerate(room.seats):
         if s is None:
             continue
 
-        if s['playerName'] == player.player_name:
+        if s['playerName'] == player_name:
             room.seats[i] = None
 
-    send({'type': 'leaveRoom', 'message': f'{player.player_name} 离开了房间', 'stage': [1, 2]}, to=room)
+    send({'type': 'leaveRoom', 'message': f'{player_name} 离开了房间', 'stage': [1, 2]}, to=room)
 
     show_online_list(room)
 
@@ -188,6 +216,16 @@ def handle_leave_room(data):
         del room_list[room_id]
 
         print(f"房间 {room_id} 因为没人而被销毁了")
+    elif player_name == room.room_owner:
+        # 如果是房主退出房间
+        p = next((p_config['playerConfig'] for p_name, p_config in room.players.items()), None)
+        if p is not None:
+            # 更换房主
+            room.room_owner = p.player_name
+            p.is_captain = True
+            send({'type': 'changeRoomOwner', 'message': f'{room.room_owner} 成为新的房主', 'stage': [1, 2]}, to=room)
+
+    emit('message', {'type': 'roomList', 'roomList': get_room_list_info()}, broadcast=True)
 
 
 # 坐下
@@ -249,7 +287,37 @@ def handle_start_game(data):
     elif room_obj.room_status is "playing":
         emit('message', {'type': 'error', 'message': '游戏正在进行中', 'messageType': 'error'})
     else:
-        emit('message', {'type': 'error', 'message': '玩家数量不足，无法开始游戏', 'messageType': 'error'}, room=room_obj)
+        emit('message', {'type': 'error', 'message': '玩家数量不足，无法开始游戏', 'messageType': 'error'},
+             room=room_obj)
+    emit('message', {'type': 'roomList', 'roomList': get_room_list_info()}, broadcast=True)
+
+
+# 减除玩家
+@socketio.on('kickPlayer')
+def handel_kick_player(data):
+    room_id = data['roomId']
+    player_name = data['playerName']
+
+    room = get_room(room_id)
+
+    player_data = next((p_data for p_name, p_data in room.players.items() if p_name == player_name), None)
+    sid = player_data['sid']
+    emit('message', {'type': 'kickPlayer', 'message': '你以被减除', 'messageType': 'error'}, room=sid)
+
+    leave_room(room, sid=sid)
+    del room.players[player_name]
+
+    # 替换位置信息
+    for i, s in enumerate(room.seats):
+        if s is None:
+            continue
+
+        if s['playerName'] == player_name:
+            room.seats[i] = None
+
+    show_online_list(room)
+
+    send({'message': f'{player_name} 被减除了！', 'messageType': 'warning', 'stage': [1, 2]}, to=get_room(room_id))
 
 
 # 获取用户信息
@@ -258,10 +326,14 @@ def handle_get_user_info(data):
     room_id = data['roomId']
     player_name = data['playerName']
 
-    if room_id == '' or room_id is None:
+    if room_id == '' or room_id is None or room_id not in room_list:
         return
 
     room = get_room(room_id)
+
+    if player_name not in room.players:
+        return
+
     player = room.players[player_name]['playerConfig']
 
     emit('message', {'type': 'getUserInfo', 'userInfo': player.to_dict()})
@@ -272,30 +344,60 @@ def handle_get_user_info(data):
 def handle_get_room_info(data):
     room_id = data['roomId']
 
-    if room_id == '' or room_id is None:
+    if room_id == '' or room_id is None or room_id not in room_list:
         return
 
     room = get_room(room_id)
     emit('message', {'type': 'getRoomInfo', 'roomInfo': room.to_dict()})
 
 
-@app.route('/rooms', methods=['GET'])
-def get_rooms():
-    """返回所有房间的列表"""
-    return jsonify(list(room_list))
+# 退出链接
+@socketio.on('disconnect')
+def handle_disconnect():
+    pass
 
 
-@app.route('/rooms/<room_name>', methods=['GET'])
-def get_room_users(room_name):
-    """返回指定房间的用户列表"""
-    for r in room_list:
-        room = room_list[r]
-        if room_name == room.room_id:
-            # print(room.to_dict()['players'])
-            players_list = [player['playerConfig'].to_dict() for player in room.players.values()]
+# 获取当前玩家手上的卡牌
+@socketio.on('getPlayerDeckList')
+def handle_get_player_deck_list(data):
+    room_id = data['roomId']
+    player_name = data['playerName']
 
-            # print(player.to_dict())
-            # players = [player['playerConfig'].to_dict() for player in room.players]
-            return jsonify(players_list)
-    else:
-        return jsonify([]), 404
+    if room_id == '' or room_id is None:
+        return
+
+    room = get_room(room_id)
+
+    if player_name not in room.players:
+        return
+
+    player = room.players[player_name]['playerConfig']
+
+    all_deck_list = []
+
+    for c_type, c_list in player.deck_list.items():
+        all_deck_list += c_list
+
+    emit('message', {'type': 'getPlayerDeckList', 'playerDeckList': all_deck_list, 'playerName': player_name})
+
+
+# @app.route('/rooms', methods=['GET'])
+# def get_rooms():
+#     """返回所有房间的列表"""
+#     return jsonify(list(room_list))
+#
+#
+# @app.route('/rooms/<room_name>', methods=['GET'])
+# def get_room_users(room_name):
+#     """返回指定房间的用户列表"""
+#     for r in room_list:
+#         room = room_list[r]
+#         if room_name == room.room_id:
+#             # print(room.to_dict()['players'])
+#             players_list = [player['playerConfig'].to_dict() for player in room.players.values()]
+#
+#             # print(player.to_dict())
+#             # players = [player['playerConfig'].to_dict() for player in room.players]
+#             return jsonify(players_list)
+#     else:
+#         return jsonify([]), 404

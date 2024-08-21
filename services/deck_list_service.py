@@ -88,9 +88,12 @@ def save_card(data):
     #                     })
 
     # 判断玩家是否有舍己为人
-    if card['cardType'] == CardType.micro_discomfort or card['cardType'] == CardType.strong_discomfort or card['cardType'] == CardType.unacceptable:
+    if card['cardType'] == CardType.micro_discomfort or card['cardType'] == CardType.strong_discomfort or card[
+        'cardType'] == CardType.unacceptable:
         for p_name, p_config in room.players.items():
             p = p_config['playerConfig']
+            if p.player_attributes['compensate']:
+                break
             if p.role_id == player.role_id:
                 continue
             for c_type, c_list in p.deck_list.items():
@@ -100,8 +103,10 @@ def save_card(data):
                 for c in c_list:
                     if c['cardName'] == 'Altruism':
                         player = p
-                        emit('message', {"message": f"因为有玩家身上携带舍己为人，此次的减益卡牌不会添加到你的卡组里", 'messageType': 'warning', 'stage': [1, 2]})
-                        emit('message', {'message': f"因为你是身上携带舍己为人，并且别人抽到了减益卡牌，将由你来承担", 'messageType': 'warning', 'stage': [1, 2]}, room=p.sid)
+                        emit('message', {"message": f"因为有玩家身上携带舍己为人，此次的减益卡牌不会添加到你的卡组里",
+                                         'messageType': 'warning', 'stage': [1, 2]})
+                        emit('message', {'message': f"因为你是身上携带舍己为人，并且别人抽到了减益卡牌，将由你来承担",
+                                         'messageType': 'warning', 'stage': [1, 2]}, room=p.sid)
     # 添加卡牌
     if check_deck_list(player.deck_list[card_type], card):
         player.deck_list[card_type].append(card)
@@ -116,7 +121,8 @@ def save_card(data):
                 and_player = get_player_by_role_id(room_id, player.blessing)
                 # and_player.deck_list[card_type].append(card)
                 emit('message', {'message': f"因为你和 {player.role_id} 号玩家"
-                                            f"有福同享 添加 {card['cardCnName']} 成功", 'stage': [1, 2]}, room=and_player.sid)
+                                            f"有福同享 添加 {card['cardCnName']} 成功", 'stage': [1, 2]},
+                     room=and_player.sid)
 
         # 有难同当
         if player.disaster != 0:
@@ -124,7 +130,8 @@ def save_card(data):
                 and_player = get_player_by_role_id(room_id, player.disaster)
                 # and_player.deck_list[card_type].append(card)
                 emit('message', {'message': f"因为你和 {player.role_id} 号玩家"
-                                            f"有难同当 添加 {card['cardCnName']} 成功", 'stage': [1, 2]}, room=and_player.sid)
+                                            f"有难同当 添加 {card['cardCnName']} 成功", 'stage': [1, 2]},
+                     room=and_player.sid)
 
         emit('message', {'type': 'saveCard', 'message': f"添加卡牌 {card['cardCnName']} 成功",
                          'messageType': 'success', 'stage': [1, 2]}, room=player.sid)
@@ -192,15 +199,16 @@ def delete_card(data):
         if card_type == CardType.micro_gain or card_type == CardType.strong_gain or card_type == CardType.opportunity:
             and_player = get_player_by_role_id(room_id, player.blessing)
             emit('message', {'message': f"因为你和 {player.role_id} 号玩家"
-                                        f"有福同享 删除 {card['cardCnName']} 成功", 'stage': [1, 2]}, room=and_player.sid)
+                                        f"有福同享 删除 {card['cardCnName']} 成功", 'stage': [1, 2]},
+                 room=and_player.sid)
 
     # 有难同当
     if player.disaster != 0:
         if card_type == CardType.micro_discomfort or card_type == CardType.strong_discomfort or card_type == CardType.unacceptable:
             and_player = get_player_by_role_id(room_id, player.disaster)
             emit('message', {'message': f"因为你和 {player.role_id} 号玩家"
-                                        f"有难同当 删除 {card['cardCnName']} 成功", 'stage': [1, 2]}, room=and_player.sid)
-
+                                        f"有难同当 删除 {card['cardCnName']} 成功", 'stage': [1, 2]},
+                 room=and_player.sid)
 
     # 删除卡牌
     player.deck_list[card_type].remove(card)
@@ -351,7 +359,7 @@ def special_card_handle(room_id, player_name, card):
     # 反人类
     # -----------------------------------
     # 重重难关
-    if card_name == 'Many-Difficulties':
+    if card_name == 'Many-Difficulties' and not player.player_attributes['compensate']:
         count = room.raid_config['raidLevelPoint']
 
         for _ in range(count):
@@ -361,7 +369,7 @@ def special_card_handle(room_id, player_name, card):
         message_str = f"因抽到 {card['cardCnName']} 卡牌，当前是第 {count} 关, 已经随机生成 {count} 张不适卡牌"
 
     # 舍己为人
-    if card_name == 'Altruism':
+    if card_name == 'Altruism' and not player.player_attributes['compensate']:
         deck_list = []
         for p_name, p_config in room.players.items():
             p = p_config['playerConfig']
@@ -379,7 +387,8 @@ def special_card_handle(room_id, player_name, card):
                             "playerName": p_name,
                             "card": card
                         })
-            emit('message', {'message': f"因为 {player.role_id} 号玩家抽到了 舍己为人，你身上的减益卡牌已被转移", 'messageType': 'warning', 'stage': [1, 2]}, room=p.sid)
+            emit('message', {'message': f"因为 {player.role_id} 号玩家抽到了 舍己为人，你身上的减益卡牌已被转移",
+                             'messageType': 'warning', 'stage': [1, 2]}, room=p.sid)
 
         for card in deck_list:
             save_card({
@@ -388,7 +397,12 @@ def special_card_handle(room_id, player_name, card):
                 "card": card
             })
 
-        emit('message', {'message': f"因为你抽到了舍己为人，你将承受所有玩家的减益卡牌", 'messageType': 'warning', 'stage': [1, 2]})
+        emit('message',
+             {'message': f"因为你抽到了舍己为人，你将承受所有玩家的减益卡牌", 'messageType': 'warning', 'stage': [1, 2]})
+
+    # 堕落之血
+    if card_name == 'Corrupted-Blood':
+        message_str = "你的欧皇增益将不生效，同时每一轮遭遇战结束会将你身上除这张卡外的一张减益卡牌传播给队友。（此卡在被圣水清除前不会被无效）"
 
     # -----------------------------------
     # 重度不适
@@ -538,7 +552,8 @@ def special_card_handle(room_id, player_name, card):
             and_player.deck_list[CardType.strong_gain] = player.deck_list[CardType.strong_gain]
             and_player.deck_list[CardType.opportunity] = player.deck_list[CardType.opportunity]
 
-            emit('message', {'message':f"{player.role_id} 号玩家抽到了有福同享，并绑定为你", 'stage': [1, 2]}, room=and_player.sid)
+            emit('message', {'message': f"{player.role_id} 号玩家抽到了有福同享，并绑定为你", 'stage': [1, 2]},
+                 room=and_player.sid)
 
     # 有难同当
     if card_name == 'Share-The-Difficulties':
@@ -804,6 +819,42 @@ def special_card_handle(room_id, player_name, card):
             })
 
         message_str = f"已删除 {card_count} 张增益卡牌 已兑换成 {card_count} 张随机卡牌"
+
+    # 上帝宽恕你
+    if card_name == 'God-Forgive-You':
+        player.deck_list[card['cardType']].remove(card)
+        card_count = 0
+
+        for c_name, c_list in player.deck_list.items():
+            if c_name == CardType.micro_discomfort or c_name == CardType.strong_discomfort or c_name == CardType.unacceptable:
+                c_to_remove = c_list[:]
+                for c in c_to_remove:
+                    card_count += 1
+                    delete_card({
+                        "roomId": room_id,
+                        "playerName": player_name,
+                        "card": c
+                    })
+
+        final_count = card_count // 2
+        for _ in range(final_count):
+            random_num = random.randint(1, 3)
+            random_card = get_random_card_by_type_and_player_deck_list(room_id, player_name, random_num, True)
+            save_card({
+                "roomId": room_id,
+                "playerName": player_name,
+                "card": random_card
+            })
+
+        message_str = f"已删除 {card_count} 张不适卡牌 已兑换成 {final_count} 张随机增益卡牌"
+
+    # 忧愁加冕
+    if card_name == 'Crowning-Of-Sorrow':
+        message_str = "取决于你的不适卡牌数量，每有2张可以依次选择获得一件忧愁武器（荆棘，恶意触碰，枯骨鳞片，渎职，枯萎囤积）"
+
+    # 商店促销
+    if card_name == 'Store-Promotions':
+        message_str = "当你有这张卡牌的时候，你在商店购买东西全部为---五折!!!"
 
     # 分发信息
     if message_str == '':
